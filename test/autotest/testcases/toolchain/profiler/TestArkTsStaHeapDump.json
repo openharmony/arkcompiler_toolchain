@@ -1,0 +1,15 @@
+{
+"description": "Config for TestArkTsStaHeapDump",
+"environment": [
+{
+"type": "device",
+"label": "phone"
+}
+],
+"driver": {
+"type": "DeviceTest",
+"py_file": [
+"toolchain/profiler/TestArkTsStaHeapDump.py"
+]
+}
+}
