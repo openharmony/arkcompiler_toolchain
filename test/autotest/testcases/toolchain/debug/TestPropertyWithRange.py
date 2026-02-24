@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Copyright (c) 2025 Huawei Device Co., Ltd.
+Copyright (c) 2025-2026 Huawei Device Co., Ltd.
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
@@ -317,11 +317,14 @@ class TestConcurrentSymbolicBreakpoints(TestCase):
         ################################################################################################################
         # main thread: Debugger.getPossibleAndSetBreakpointByUrl
         ################################################################################################################
-        locations = [debugger.BreakLocationUrl(url=self.config['file_path']['index'], line_number=220)]
+        locations = [debugger.BreakLocationUrl(url=self.config['file_path']['index'], line_number=187),
+                     debugger.BreakLocationUrl(url=self.config['file_path']['index'], line_number=200)]
         params = debugger.SetBreakpointsLocations(locations)
         response = await self.debugger_impl.send("Debugger.getPossibleAndSetBreakpointsByUrl", main_thread, params)
         self.common_utils.assert_equal(response['result']['locations'][0]['id'],
-                                       'id:220:0' + self.config['file_path']['index'])
+                                       'id:187:0:' + self.config['file_path']['index'])
+        self.common_utils.assert_equal(response['result']['locations'][1]['id'],
+                                       'id:200:0:' + self.config['file_path']['index'])
         ################################################################################################################
         # main thread: Debugger.resume
         ################################################################################################################
@@ -333,7 +336,7 @@ class TestConcurrentSymbolicBreakpoints(TestCase):
         self.common_utils.assert_equal(response['params']['callFrames'][0]['url'],
                                        self.config['file_path']['index'])
         self.common_utils.assert_equal(response['params']['hitBreakpoints'],
-                                       ['id:220:4:' + self.config['file_path']['index']])
+                                       ['id:187:4:' + self.config['file_path']['index']])
         ################################################################################################################
         # main thread: Runtime.getProperties
         ################################################################################################################
@@ -363,7 +366,7 @@ class TestConcurrentSymbolicBreakpoints(TestCase):
         params = runtime.GetPropertiesParams('19', True, False, True)
         response = await self.runtime_impl.send("Runtime.getProperties", main_thread, params)
         self.common_utils.assert_equal(response['result']['result'][1]['name'], '[[Deque]]')
-        self.common_utils.assert_equal(response['result']['result'][1]['value']['arrayOrContainer'], True)
+        self.common_utils.assert_equal(response['result']['result'][1]['value']['arrayOrContainer'], 'Array')
         ################################################################################################################
         # main thread: Runtime.getProperties
         ################################################################################################################
@@ -378,7 +381,7 @@ class TestConcurrentSymbolicBreakpoints(TestCase):
         params = runtime.GetPropertiesParams('25', True, False, True)
         response = await self.runtime_impl.send("Runtime.getProperties", main_thread, params)
         self.common_utils.assert_equal(response['result']['result'][1]['name'], '[[HashMap]]')
-        self.common_utils.assert_equal(response['result']['result'][1]['value']['arrayOrContainer'], True)
+        self.common_utils.assert_equal(response['result']['result'][1]['value']['arrayOrContainer'], 'Array')
         ################################################################################################################
         # main thread: Runtime.getProperties
         ################################################################################################################
@@ -393,7 +396,7 @@ class TestConcurrentSymbolicBreakpoints(TestCase):
         params = runtime.GetPropertiesParams('31', True, False, True)
         response = await self.runtime_impl.send("Runtime.getProperties", main_thread, params)
         self.common_utils.assert_equal(response['result']['result'][1]['name'], '[[Entries]]')
-        self.common_utils.assert_equal(response['result']['result'][1]['value']['arrayOrContainer'], True)
+        self.common_utils.assert_equal(response['result']['result'][1]['value']['arrayOrContainer'], 'Array')
         ################################################################################################################
         # main thread: Runtime.getProperties
         ################################################################################################################
@@ -402,6 +405,39 @@ class TestConcurrentSymbolicBreakpoints(TestCase):
         self.common_utils.assert_equal(len(response['result']['result']), 151)
         self.common_utils.assert_equal(response['result']['result'][0]['name'], '0')
         self.common_utils.assert_equal(response['result']['result'][0]['value']['type'], 'number')
+        ################################################################################################################
+                # main thread: Debugger.resume
+        ################################################################################################################
+        await self.debugger_impl.send("Debugger.resume", main_thread)
+        ################################################################################################################
+        # main thread: Debugger.paused, hit breakpoint
+        ################################################################################################################
+        response = await self.debugger_impl.recv("Debugger.paused", main_thread)
+        self.common_utils.assert_equal(response['params']['callFrames'][0]['url'], self.config['file_path']['index'])
+        self.common_utils.assert_equal(response['params']['hitBreakpoints'],
+                                       ['id:200:4:' + self.config['file_path']['index']])
+        ################################################################################################################
+        # main thread: Runtime.getProperties
+        ################################################################################################################
+        params = runtime.GetPropertiesParams('0', True, False, True)
+        response = await self.runtime_impl.send("Runtime.getProperties", main_thread, params)
+        self.common_utils.assert_equal(response['result']['result'][0]['name'], 'testLargeContainer')
+        self.common_utils.assert_equal(response['result']['result'][0]['value']['type'], 'function')
+        ################################################################################################################
+        # main thread: Runtime.getProperties
+        ################################################################################################################
+        params = runtime.GetPropertiesParams('9', True, False, True)
+        response = await self.runtime_impl.send("Runtime.getProperties", main_thread, params)
+        self.common_utils.assert_equal(response['result']['result'][1]['name'], '[[Queue]]')
+        self.common_utils.assert_equal(response['result']['result'][1]['value']['arrayOrContainer'], 'Array')
+        ################################################################################################################
+        # main thread: Runtime.getProperties
+        ################################################################################################################
+        params = runtime.GetPropertiesParams('11', True, False, True, 0, 100)
+        response = await self.runtime_impl.send("Runtime.getProperties", main_thread, params)
+        self.common_utils.assert_equal(len(response['result']['result']), 100)
+        self.common_utils.assert_equal(response['result']['result'][0]['name'], '0')
+        self.common_utils.assert_equal(response['result']['result'][0]['value']['unserializableValue'], 'a')
         ################################################################################################################
         # main thread: Debugger.disable
         ################################################################################################################
