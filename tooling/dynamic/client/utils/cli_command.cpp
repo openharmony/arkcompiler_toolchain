@@ -14,6 +14,7 @@
  */
 
 #include "tooling/dynamic/client/utils/cli_command.h"
+#include "tooling/dynamic/client/utils/parse_cli_int32.h"
 
 namespace OHOS::ArkCompiler::Toolchain {
 const std::string HELP_MSG = "usage: <command> <options>\n"
@@ -298,8 +299,19 @@ ErrCode CliCommand::CpuProfileCommand(const std::string &cmd)
         return ErrCode::ERR_OK;
     }
     if (cmd == "cpuprofile-setSamplingInterval") {
+        if (GetArgList().empty()) {
+            LOGE("cpuprofile-setSamplingInterval missing interval");
+            OutputCommand(cmd, false);
+            return ErrCode::ERR_FAIL;
+        }
+        int32_t interval = 0;
+        if (!ParseCliInt32(GetArgList()[0], interval)) {
+            LOGE("invalid sampling interval %{public}s", GetArgList()[0].c_str());
+            OutputCommand(cmd, false);
+            return ErrCode::ERR_FAIL;
+        }
         std::cout << "exe success, cmd is " << cmd << std::endl;
-        profilerClient.SetSamplingInterval(std::atoi(GetArgList()[0].c_str()));
+        profilerClient.SetSamplingInterval(interval);
     }
     if (cmd == "cpuprofile-stop" && GetArgList().size() == 1) {
         pro.SetAddress(GetArgList()[0]);
@@ -377,18 +389,23 @@ ErrCode CliCommand::BreakCommand(const std::string &cmd)
     BreakPointManager &breakpointManager = session->GetBreakPointManager();
     std::vector<Breaklocation> breaklist_ = breakpointManager.Getbreaklist();
     if (GetArgList().size() == 2) { //2: two arguments
-        if (!Utils::IsNumber(GetArgList()[1])) {
+        int32_t lineNumber = 0;
+        if (!ParseCliInt32(GetArgList()[1], lineNumber)) {
+            LOGE("invalid break line %{public}s", GetArgList()[1].c_str());
             OutputCommand(cmd, false);
             return ErrCode::ERR_FAIL;
         }
         for (auto breakpoint : breaklist_) {
-            if (breakpoint.url == GetArgList()[0] &&
-                std::stoi(breakpoint.lineNumber) + 1 == std::stoi(GetArgList()[1])) {
+            int32_t existLine = 0;
+            if (!ParseCliInt32(breakpoint.lineNumber, existLine)) {
+                continue;
+            }
+            if (breakpoint.url == GetArgList()[0] && existLine + 1 == lineNumber) {
                 std::cout << "the breakpoint is exist" << std::endl;
                 return ErrCode::ERR_FAIL;
             }
         }
-        debuggerCli.AddBreakPointInfo(GetArgList()[0], std::stoi(GetArgList()[1]));
+        debuggerCli.AddBreakPointInfo(GetArgList()[0], lineNumber);
     } else {
         OutputCommand(cmd, false);
         return ErrCode::ERR_FAIL;
@@ -489,11 +506,12 @@ ErrCode CliCommand::DeleteCommand(const std::string &cmd)
     DebuggerClient &debuggerCli = session->GetDomainManager().GetDebuggerClient();
     BreakPointManager &breakpoint = session->GetBreakPointManager();
     if (GetArgList().size() == 1) {
-        if (!Utils::IsNumber(GetArgList()[0])) {
+        int32_t tmpNum = 0;
+        if (!ParseCliInt32(GetArgList()[0], tmpNum) || tmpNum <= 0) {
+            LOGE("invalid breakpoint index %{public}s", GetArgList()[0].c_str());
             OutputCommand(cmd, false);
             return ErrCode::ERR_FAIL;
         }
-        int tmpNum = std::stoi(GetArgList()[0]);
         size_t num = static_cast<size_t>(tmpNum);
         if (breakpoint.Getbreaklist().size() >= num && num > 0) {
             debuggerCli.AddBreakPointInfo(breakpoint.Getbreaklist()[num - 1].breakpointId, 0); // 1: breakpoinId
@@ -540,11 +558,13 @@ ErrCode CliCommand::InfosourceCommand(const std::string &cmd)
         OutputCommand(cmd, false);
         return ErrCode::ERR_FAIL;
     } else if (GetArgList().size() == 1) {
-        if (!Utils::IsNumber(GetArgList()[0])) {
+        int32_t scriptId = 0;
+        if (!ParseCliInt32(GetArgList()[0], scriptId)) {
+            LOGE("invalid script id %{public}s", GetArgList()[0].c_str());
             OutputCommand(cmd, false);
             return ErrCode::ERR_FAIL;
         }
-        sourceManager.GetFileSource(std::stoi(GetArgList()[0]));
+        sourceManager.GetFileSource(scriptId);
     } else {
         sourceManager.GetFileName();
     }
@@ -641,31 +661,35 @@ ErrCode CliCommand::PrintCommand(const std::string &cmd)
     }
     RuntimeClient &runtimeClient = session->GetDomainManager().GetRuntimeClient();
     if (GetArgList().size() == 1) {
-        if (!Utils::IsNumber(GetArgList()[0])) {
+        int32_t index = 0;
+        if (!ParseCliInt32(GetArgList()[0], index)) {
+            LOGE("invalid print index %{public}s", GetArgList()[0].c_str());
             return ErrCode::ERR_FAIL;
         }
         runtimeClient.SetIsInitializeTree(false);
         VariableManager &variableManager = session->GetVariableManager();
-        int32_t objectId = variableManager.FindObjectIdWithIndex(std::stoi(GetArgList()[0]));
+        int32_t objectId = variableManager.FindObjectIdWithIndex(index);
         runtimeClient.SetObjectId(std::to_string(objectId));
     } else if (GetArgList().size() == maxArgs - 1) {
-        if (!Utils::IsNumber(GetArgList()[1])) {
+        int32_t objectId = 0;
+        if (!ParseCliInt32(GetArgList()[1], objectId)) {
+            LOGE("invalid print object id %{public}s", GetArgList()[1].c_str());
             return ErrCode::ERR_FAIL;
         }
         runtimeClient.SetIsInitializeTree(false);
         VariableManager &variableManager = session->GetVariableManager();
-        int32_t objectId = std::stoi(GetArgList()[1]);
         runtimeClient.SetObjectId(std::to_string(objectId));
     } else if (GetArgList().size() == maxArgs) {
-        if (!Utils::IsNumber(GetArgList()[0]) || !Utils::IsNumber(GetArgList()[1]) ||
-            !Utils::IsNumber(GetArgList()[maxArgs - 1])) {
+        int32_t objectId = 0;
+        int32_t startIndex = 0;
+        int32_t groupCount = 0;
+        if (!ParseCliInt32(GetArgList()[0], objectId) || !ParseCliInt32(GetArgList()[1], startIndex) ||
+            !ParseCliInt32(GetArgList()[maxArgs - 1], groupCount)) {
+            LOGE("invalid print object/start/count args");
             return ErrCode::ERR_FAIL;
         }
         runtimeClient.SetIsInitializeTree(false);
         VariableManager &variableManager = session->GetVariableManager();
-        int32_t objectId = std::stoi(GetArgList()[0]);
-        int32_t startIndex = std::stoi(GetArgList()[1]);
-        int32_t groupCount = std::stoi(GetArgList()[2]);
         runtimeClient.SetObjectId(std::to_string(objectId));
         runtimeClient.SetStartIndex(startIndex);
         runtimeClient.SetGroupCount(groupCount);
